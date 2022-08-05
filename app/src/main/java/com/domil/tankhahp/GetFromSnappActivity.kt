@@ -127,7 +127,7 @@ class GetFromSnappActivity : ComponentActivity() {
         val dir = File(this.getExternalFilesDir(null), "/")
         val imgFile = File(dir, "image${MainActivity.uiList.size + 1}.png")
         val outputStream = FileOutputStream(imgFile.absolutePath)
-        image?.compress(Bitmap.CompressFormat.PNG, 90, outputStream)
+        image?.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
         this.imgAddress = imgFile.absolutePath
         this.specification = "سفر از " + from + " به " + to
         this.date = date

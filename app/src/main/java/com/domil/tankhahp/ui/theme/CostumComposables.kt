@@ -11,6 +11,7 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalFocusManager
@@ -132,7 +133,7 @@ fun Item(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxHeight()
+                    .fillMaxSize()
                     .padding(top = 16.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
@@ -141,24 +142,25 @@ fun Item(
                     text = text1,
                     style = MaterialTheme.typography.body2,
                     textAlign = TextAlign.Right,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp).align(Alignment.Start)
                 )
                 Text(
                     text = text2,
                     style = MaterialTheme.typography.body2,
                     textAlign = TextAlign.Right,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp).align(Alignment.Start)
                 )
                 Text(
                     text = "مرکز هزینه: " + uiList[i].payTo,
                     style = MaterialTheme.typography.body2,
                     textAlign = TextAlign.Right,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp).align(Alignment.Start)
                 )
                 Text(
                     text = "شرح: " + uiList[i].specification,
                     style = MaterialTheme.typography.h4,
                     textAlign = TextAlign.Right,
+                    modifier = Modifier.align(Alignment.Start)
                 )
             }
         }

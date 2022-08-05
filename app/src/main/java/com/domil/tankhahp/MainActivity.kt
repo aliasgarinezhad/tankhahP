@@ -1,6 +1,8 @@
 package com.domil.tankhahp
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
@@ -21,6 +23,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.preference.PreferenceManager
 import com.domil.tankhahp.JalaliDate.JalaliDate
@@ -61,6 +65,34 @@ class MainActivity : ComponentActivity() {
         fileName += util.currentShamsidate
 
         loadMemory()
+        checkPermission()
+    }
+
+    private fun checkPermission() {
+
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.CAMERA,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                ),
+                0
+            )
+        }
     }
 
     override fun onResume() {
@@ -109,7 +141,7 @@ class MainActivity : ComponentActivity() {
         edit.apply()
     }
 
-    private fun exportImages(excelUri : Uri) {
+    private fun exportImages(excelUri: Uri) {
 
         var images = mutableListOf<Bitmap>()
         val outputImages = mutableListOf<Bitmap>()
@@ -118,20 +150,46 @@ class MainActivity : ComponentActivity() {
 
         uiList.forEach {
             if (it.imgAddress != "") {
-                images.add(writeFactorNumber(BitmapFactory.decodeFile(it.imgAddress), it.factorNumber))
+                images.add(
+                    writeFactorNumber(
+                        BitmapFactory.decodeFile(it.imgAddress),
+                        it.factorNumber
+                    )
+                )
             }
         }
 
         for (i in 0 until images.size / 4) {
-            outputImages.add(combineFourBitmaps(images[0 + (4*i)], images[1 + (4*i)], images[2 + (4*i)], images[3 + (4*i)])!!)
+            outputImages.add(
+                combineFourBitmaps(
+                    images[0 + (4 * i)],
+                    images[1 + (4 * i)],
+                    images[2 + (4 * i)],
+                    images[3 + (4 * i)]
+                )!!
+            )
         }
 
-        if(images.size % 4 == 1) {
+        if (images.size % 4 == 1) {
             outputImages.add(images[images.size - 1])
         } else if (images.size % 4 == 2) {
-            outputImages.add(combineFourBitmaps(images[images.size - 2], images[images.size - 1], null, null)!!)
+            outputImages.add(
+                combineFourBitmaps(
+                    images[images.size - 2],
+                    images[images.size - 1],
+                    null,
+                    null
+                )!!
+            )
         } else if (images.size % 4 == 3) {
-            outputImages.add(combineFourBitmaps(images[images.size - 3], images[images.size - 2], images[images.size - 1], null)!!)
+            outputImages.add(
+                combineFourBitmaps(
+                    images[images.size - 3],
+                    images[images.size - 2],
+                    images[images.size - 1],
+                    null
+                )!!
+            )
         }
 
         val dir = File(getExternalFilesDir(null), "/")
@@ -144,11 +202,13 @@ class MainActivity : ComponentActivity() {
         }
 
         outputFiles.forEach {
-            uris.add(FileProvider.getUriForFile(
-                this,
-                this.applicationContext.packageName + ".provider",
-                it
-            ))
+            uris.add(
+                FileProvider.getUriForFile(
+                    this,
+                    this.applicationContext.packageName + ".provider",
+                    it
+                )
+            )
         }
 
         uris.add(excelUri)
@@ -160,7 +220,7 @@ class MainActivity : ComponentActivity() {
         applicationContext.startActivity(shareIntent)
     }
 
-    private fun writeFactorNumber(originalBitmap: Bitmap, factorNumber : Int) : Bitmap{
+    private fun writeFactorNumber(originalBitmap: Bitmap, factorNumber: Int): Bitmap {
 
         val mutableBitmap: Bitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
 
@@ -175,7 +235,12 @@ class MainActivity : ComponentActivity() {
         return mutableBitmap
     }
 
-    private fun combineFourBitmaps(topLeft: Bitmap, topRight: Bitmap, bottomLeft: Bitmap?, bottomRight: Bitmap?): Bitmap? {
+    private fun combineFourBitmaps(
+        topLeft: Bitmap,
+        topRight: Bitmap,
+        bottomLeft: Bitmap?,
+        bottomRight: Bitmap?
+    ): Bitmap? {
 
         val width = topLeft.width * 2
         val height = topLeft.height * 2
@@ -188,7 +253,12 @@ class MainActivity : ComponentActivity() {
         if (bottomLeft != null) {
             canvas.drawBitmap(bottomLeft, 0f, topLeft.height.toFloat(), null)
             if (bottomRight != null) {
-                canvas.drawBitmap(bottomRight, topLeft.width.toFloat(), topRight.height.toFloat(), null)
+                canvas.drawBitmap(
+                    bottomRight,
+                    topLeft.width.toFloat(),
+                    topRight.height.toFloat(),
+                    null
+                )
             }
         }
         return combined
@@ -244,20 +314,27 @@ class MainActivity : ComponentActivity() {
         sheet.setColumnWidth(4, 5000)
         sheet.setColumnWidth(5, 5000)
 
-        for(i in 1 until 4) {
+        for (i in 1 until 4) {
             for (j in 1 until 3) {
                 setRegionBorder(CellRangeAddress(i, i, j, j), sheet)
             }
         }
 
-        for(i in 5 until sheet.physicalNumberOfRows - 1) {
+        for (i in 5 until sheet.physicalNumberOfRows - 1) {
             for (j in 1 until 6) {
                 setRegionBorder(CellRangeAddress(i, i, j, j), sheet)
             }
         }
 
         for (j in 4 until 6) {
-            setRegionBorder(CellRangeAddress(sheet.physicalNumberOfRows - 1, sheet.physicalNumberOfRows - 1, j, j), sheet)
+            setRegionBorder(
+                CellRangeAddress(
+                    sheet.physicalNumberOfRows - 1,
+                    sheet.physicalNumberOfRows - 1,
+                    j,
+                    j
+                ), sheet
+            )
         }
 
         val dir = File(this.getExternalFilesDir(null), "/")
@@ -277,7 +354,7 @@ class MainActivity : ComponentActivity() {
         exportImages(uri)
     }
 
-    private fun createCell(row : Row, columnIndex : Int, value : String) {
+    private fun createCell(row: Row, columnIndex: Int, value: String) {
 
         val cell = row.createCell(columnIndex)
         val cellStyle = cell.cellStyle
@@ -286,7 +363,7 @@ class MainActivity : ComponentActivity() {
         cell.setCellValue(value)
     }
 
-    private fun createCell(row : Row, columnIndex : Int, value : Double) {
+    private fun createCell(row: Row, columnIndex: Int, value: Double) {
 
         val cell = row.createCell(columnIndex)
         val cellStyle = cell.cellStyle
@@ -419,7 +496,7 @@ class MainActivity : ComponentActivity() {
                 text2 = "مبلغ (ریال): " + uiList[i].price.toString(),
                 clickable = true
             ) {
-                Intent(this@MainActivity, ShowPictureActivity :: class.java).apply {
+                Intent(this@MainActivity, ShowPictureActivity::class.java).apply {
                     putExtra("imgAddress", uiList[i].imgAddress)
                     startActivity(this)
                 }
