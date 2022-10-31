@@ -11,24 +11,22 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.preference.PreferenceManager
 import com.domil.tankhahp.ui.theme.ErrorSnackBar
 import com.domil.tankhahp.ui.theme.TankhahPTheme
+import com.domil.tankhahp.ui.theme.Typography
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.izettle.html2bitmap.Html2Bitmap
 import com.izettle.html2bitmap.content.WebViewContent
 import kotlinx.coroutines.CoroutineScope
@@ -46,11 +44,17 @@ class GetFromSnappActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var goal by mutableStateOf("")
     private var openGoalDialog by mutableStateOf(false)
+    private var isScanningBill by mutableStateOf(false)
+    private var openHelpDialog by mutableStateOf(true)
+    private var savePressed by mutableStateOf(false)
     private var date = ""
     private var specification = ""
     private var price = 0L
     private val url = "https://app.snapp.taxi/ride-history"
     private var imgAddress = ""
+    private var from = ""
+    private var to = ""
+    private var uiList = mutableStateListOf<Items>()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,7 +65,20 @@ class GetFromSnappActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun doUpdateVisitedHistory(
+                    view: WebView?,
+                    url: String?,
+                    isReload: Boolean
+                ) {
+                    CoroutineScope(IO).launch {
+                        if (url.toString().contains("https://snapp.taxi/receipt/")) {
+                            scanBill(url.toString())
+                        }
+                    }
+                    super.doUpdateVisitedHistory(view, url, isReload)
+                }
+            }
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             loadUrl(this@GetFromSnappActivity.url)
@@ -69,72 +86,111 @@ class GetFromSnappActivity : ComponentActivity() {
         }
 
         setContent { Page() }
-        CoroutineScope(Dispatchers.Default).launch {
-            state.showSnackbar(
-                "لطفا ابتدا به صفحه مشخصات سفر بروید و روی دکمه (رسید سفر) در پایین صفحه کلیک کنید. در صفحه جدید، روی اسکن رسید سفر کلیک کنید.",
-                null,
-                SnackbarDuration.Long
-            )
-        }
+
+        loadMemory()
+    }
+
+    private fun loadMemory() {
+
+        val type = object : TypeToken<SnapshotStateList<Items>>() {}.type
+
+        val memory = PreferenceManager.getDefaultSharedPreferences(this)
+        uiList = Gson().fromJson(
+            memory.getString("Items", ""),
+            type
+        ) ?: mutableStateListOf()
     }
 
     private fun scanBill(url: String) {
 
-        val doc = Jsoup.connect(url).get()
-        //get from and to
-        val fromToHtml = doc.getElementsByClass("col-md-9 col-xs-7").html()
+        isScanningBill = true
 
-        if (fromToHtml.isEmpty()) {
+        try {
+            val doc = Jsoup.connect(url).get()
+            //get from and to
+            val fromToHtml = doc.getElementsByClass("col-md-9 col-xs-7").html()
+
+            if (fromToHtml.isEmpty()) {
+                CoroutineScope(Dispatchers.Default).launch {
+                    state.showSnackbar(
+                        "مشکلی در دریافت رسید پیش آمده است. لطفا بعد از مدتی دوباره امتحان کنید.",
+                        null,
+                        SnackbarDuration.Long
+                    )
+                }
+                isScanningBill = false
+                return
+            }
+
+            val fromStartString = "مبدا:</span><span>"
+            val fromIndexStart = fromToHtml.indexOf(fromStartString, 0)
+            val fromIndexEnd =
+                fromToHtml.indexOf("</span>", fromIndexStart + fromStartString.length)
+            from = fromToHtml.substring(fromIndexStart + fromStartString.length, fromIndexEnd)
+
+            while (from.count {
+                    it == '،'
+                } > 1) {
+                from = from.substring(from.indexOfFirst {
+                    it == '،'
+                } + 2)
+            }
+
+            val toStartString = "مقصد:</span><span>"
+            val toIndexStart = fromToHtml.indexOf(toStartString, fromIndexEnd)
+            val toIndexEnd = fromToHtml.indexOf("</span>", toIndexStart + toStartString.length)
+            to = fromToHtml.substring(toIndexStart + toStartString.length, toIndexEnd)
+
+            while (to.count {
+                    it == '،'
+                } > 1) {
+                to = to.substring(to.indexOfFirst {
+                    it == '،'
+                } + 2)
+            }
+            //get date and price
+            val datePriceHtml = doc.getElementsByClass("table table-striped").text().toString()
+
+            val priceStartString = "مبلغ پرداختی:"
+            val priceIndexStart = datePriceHtml.indexOf(priceStartString, 0)
+            val priceIndexEnd =
+                datePriceHtml.indexOf("تاریخ سفر", priceIndexStart + priceStartString.length)
+            var price =
+                datePriceHtml.substring(priceIndexStart + priceStartString.length, priceIndexEnd)
+
+            val dateStartString = "تاریخ سفر:"
+            val dateIndexStart = datePriceHtml.indexOf(dateStartString, 0)
+            val dateIndexEnd =
+                datePriceHtml.indexOf("زمان سفر", dateIndexStart + dateStartString.length)
+            val date =
+                datePriceHtml.substring(dateIndexStart + dateStartString.length, dateIndexEnd)
+
+            price = convertPersianNumbersToEnglish(price)
+
+            val image =
+                Html2Bitmap.Builder(this@GetFromSnappActivity, WebViewContent.html(doc.html()))
+                    .build().bitmap
+            val dir = File(this.getExternalFilesDir(null), "/")
+            val imgFile = File(dir, "image${uiList.size + 1}.png")
+            val outputStream = FileOutputStream(imgFile.absolutePath)
+            image?.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            this.imgAddress = imgFile.absolutePath
+            this.specification = "سفر از " + from + " به " + to
+            this.date = date
+            this.price = price.toLong() / 10
+
+            isScanningBill = false
+            openGoalDialog = true
+        } catch (e: Exception) {
+            isScanningBill = false
             CoroutineScope(Dispatchers.Default).launch {
                 state.showSnackbar(
-                    "لطفا ابتدا وارد صفحه (رسید سفر) شوید.",
+                    "مشکلی در دریافت رسید پیش آمده است. لطفا بعد از مدتی دوباره امتحان کنید.",
                     null,
                     SnackbarDuration.Long
                 )
             }
-            return
         }
-
-        val fromStartString = "مبدا:</span><span>"
-        val fromIndexStart = fromToHtml.indexOf(fromStartString, 0)
-        val fromIndexEnd = fromToHtml.indexOf("</span>", fromIndexStart + fromStartString.length)
-        val from = fromToHtml.substring(fromIndexStart + fromStartString.length, fromIndexEnd)
-
-        val toStartString = "مقصد:</span><span>"
-        val toIndexStart = fromToHtml.indexOf(toStartString, fromIndexEnd)
-        val toIndexEnd = fromToHtml.indexOf("</span>", toIndexStart + toStartString.length)
-        val to = fromToHtml.substring(toIndexStart + toStartString.length, toIndexEnd)
-
-        //get date and price
-        val datePriceHtml = doc.getElementsByClass("table table-striped").text().toString()
-
-        val priceStartString = "مبلغ پرداختی:"
-        val priceIndexStart = datePriceHtml.indexOf(priceStartString, 0)
-        val priceIndexEnd =
-            datePriceHtml.indexOf("تاریخ سفر", priceIndexStart + priceStartString.length)
-        var price =
-            datePriceHtml.substring(priceIndexStart + priceStartString.length, priceIndexEnd)
-
-        val dateStartString = "تاریخ سفر:"
-        val dateIndexStart = datePriceHtml.indexOf(dateStartString, 0)
-        val dateIndexEnd =
-            datePriceHtml.indexOf("زمان سفر", dateIndexStart + dateStartString.length)
-        val date = datePriceHtml.substring(dateIndexStart + dateStartString.length, dateIndexEnd)
-
-        price = convertPersianNumbersToEnglish(price)
-
-        val image = Html2Bitmap.Builder(this@GetFromSnappActivity, WebViewContent.html(doc.html())).build().bitmap
-        val dir = File(this.getExternalFilesDir(null), "/")
-        val imgFile = File(dir, "image${MainActivity.uiList.size + 1}.png")
-        val outputStream = FileOutputStream(imgFile.absolutePath)
-        image?.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-        this.imgAddress = imgFile.absolutePath
-        this.specification = "سفر از " + from + " به " + to
-        this.date = date
-        this.price = price.toLong()
-
-
-        openGoalDialog = true
     }
 
     private fun saveToMemory() {
@@ -144,7 +200,7 @@ class GetFromSnappActivity : ComponentActivity() {
 
         edit.putString(
             "Items",
-            Gson().toJson(MainActivity.uiList).toString()
+            Gson().toJson(uiList).toString()
         )
         edit.apply()
     }
@@ -181,7 +237,7 @@ class GetFromSnappActivity : ComponentActivity() {
     }
 
     private fun back() {
-        if (webView.url == "https://app.snapp.taxi/ride-history") {
+        if (webView.url == "https://app.snapp.taxi/ride-history" || webView.url?.indexOf("https://app.snapp.taxi/login") != -1) {
             finish()
         } else {
             webView.goBack()
@@ -193,7 +249,6 @@ class GetFromSnappActivity : ComponentActivity() {
         TankhahPTheme {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Scaffold(
-                    topBar = { AppBar() },
                     content = { Content() },
                     snackbarHost = { ErrorSnackBar(state) },
                 )
@@ -210,52 +265,17 @@ class GetFromSnappActivity : ComponentActivity() {
             if (openGoalDialog) {
                 FileAlertDialog()
             }
+            if (isScanningBill) {
+                ShowLoadingAlertDialog()
+            }
+            if (openHelpDialog && uiList.isEmpty()) {
+                ShowHelpAlertDialog()
+            }
             AndroidView(
                 factory = {
                     webView
                 })
         }
-    }
-
-    @Composable
-    fun AppBar() {
-
-        TopAppBar(
-
-            navigationIcon = {
-                IconButton(onClick = { back() }) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_baseline_arrow_back_24),
-                        contentDescription = ""
-                    )
-                }
-            },
-
-            actions = {
-                IconButton(onClick = {
-                    val url = webView.url.toString()
-                    CoroutineScope(IO).launch {
-                        scanBill(url)
-                    }
-                }) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_barcode_scan),
-                        contentDescription = ""
-                    )
-                }
-            },
-
-            title = {
-                Text(
-                    text = "اطلاعات سفر",
-                    modifier = Modifier
-                        .padding(end = 15.dp)
-                        .fillMaxSize()
-                        .wrapContentSize(),
-                    textAlign = TextAlign.Center,
-                )
-            }
-        )
     }
 
     @Composable
@@ -265,42 +285,72 @@ class GetFromSnappActivity : ComponentActivity() {
 
             buttons = {
 
-                Column {
-
-                    Text(
-                        text = "لطفا دلیل سفر را بنویسید", modifier = Modifier
-                            .padding(top = 10.dp, start = 10.dp, end = 10.dp)
-                    )
+                Column(modifier = Modifier.wrapContentHeight()) {
 
                     OutlinedTextField(
                         value = goal, onValueChange = {
                             goal = it
                         },
+                        label = { Text(text = "دلیل سفر") },
                         modifier = Modifier
-                            .padding(top = 10.dp, start = 10.dp, end = 10.dp)
-                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
+                            .align(Alignment.CenterHorizontally),
+                        isError = if (savePressed) goal.isEmpty() else false,
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = from, onValueChange = {
+                            from = it
+                        },
+                        label = { Text(text = "مبدا") },
+                        modifier = Modifier
+                            .padding(top = 16.dp, start = 24.dp, end = 24.dp)
+                            .align(Alignment.CenterHorizontally),
+                        isError = if (savePressed) from.isEmpty() else false,
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = to, onValueChange = {
+                            to = it
+                        },
+                        label = { Text(text = "مقصد") },
+                        modifier = Modifier
+                            .padding(top = 16.dp, start = 24.dp, end = 24.dp)
+                            .align(Alignment.CenterHorizontally),
+                        isError = if (savePressed) to.isEmpty() else false,
+                        singleLine = true
                     )
 
                     Button(modifier = Modifier
-                        .padding(bottom = 10.dp, top = 10.dp, start = 10.dp, end = 10.dp)
-                        .align(Alignment.CenterHorizontally),
+                        .padding(bottom = 24.dp, top = 24.dp, end = 24.dp, start = 24.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .height(52.dp)
+                        .fillMaxWidth(),
                         onClick = {
+                            savePressed = true
+                            if (goal == "" || from == "" || to == "") {
+                                return@Button
+                            }
+                            specification = "سفر از " + from + " به " + to
                             openGoalDialog = false
-                            MainActivity.uiList.add(
+                            uiList.add(
                                 Items(
                                     specification = specification + " بابت " + goal,
                                     date = date,
                                     price = price,
                                     payTo = "اسنپ",
-                                    factorNumber = MainActivity.uiList.size + 1,
-                                    imgAddress = imgAddress
+                                    factorNumber = uiList.size + 1,
+                                    imgAddress = imgAddress,
+                                    hasImageFile = true,
                                 )
                             )
                             saveToMemory()
                             webView.goBack()
                             webView.goBack()
                         }) {
-                        Text(text = "ذخیره")
+                        Text(text = "ذخیره", style = Typography.h5)
                     }
                 }
             },
@@ -308,6 +358,76 @@ class GetFromSnappActivity : ComponentActivity() {
             onDismissRequest = {
                 openGoalDialog = false
             }
+        )
+    }
+
+    @Composable
+    fun ShowLoadingAlertDialog() {
+        AlertDialog(
+            onDismissRequest = { },
+            buttons = {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .padding(top = 24.dp),
+                        strokeWidth = 6.dp
+                    )
+
+                    Text(
+                        text = "در حال اسکن رسید سفر",
+                        modifier = Modifier.padding(top = 48.dp, bottom = 24.dp),
+                        style = Typography.h5
+                    )
+                }
+            },
+        )
+    }
+
+    @Composable
+    fun ShowHelpAlertDialog() {
+        AlertDialog(
+            onDismissRequest = { openHelpDialog = false },
+            buttons = {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    Text(
+                        text = "ابتدا سفر مورد نظر خود را انتخاب کنید. سپس دکمه (رسید سفر) در پایین صفحه را لمس کنید.",
+                        modifier = Modifier.padding(
+                            top = 24.dp,
+                            bottom = 0.dp,
+                            end = 24.dp,
+                            start = 24.dp
+                        ),
+                        style = Typography.h5
+                    )
+                    Button(
+                        onClick = {
+                            openHelpDialog = false
+                        },
+                        modifier = Modifier
+                            .padding(bottom = 24.dp, top = 24.dp, end = 24.dp, start = 24.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .height(52.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(text = "متوجه شدم", style = MaterialTheme.typography.h5)
+                    }
+                }
+            },
         )
     }
 }

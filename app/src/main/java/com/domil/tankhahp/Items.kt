@@ -7,4 +7,5 @@ data class Items(
     var factorNumber: Int,
     var price: Long,
     var imgAddress : String,
+    var hasImageFile : Boolean
 )

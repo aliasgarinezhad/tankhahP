@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -31,6 +32,7 @@ import com.domil.tankhahp.JalaliDate.JalaliDate
 import com.domil.tankhahp.ui.theme.*
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import org.apache.poi.ss.usermodel.BuiltinFormats.getBuiltinFormat
 import org.apache.poi.ss.usermodel.CellStyle
 import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.Sheet
@@ -50,10 +52,10 @@ class MainActivity : ComponentActivity() {
     private var state = SnackbarHostState()
     private var fileName by mutableStateOf("تنخواه تاریخ ")
     private var openFileDialog by mutableStateOf(false)
-
-    companion object {
-        var uiList = mutableStateListOf<Items>()
-    }
+    private var openSelectFactorTypeDialog by mutableStateOf(false)
+    private var openHelpDialog by mutableStateOf(true)
+    private var isGeneratingOutputFile by mutableStateOf(false)
+    private var uiList = mutableStateListOf<Items>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,7 +65,6 @@ class MainActivity : ComponentActivity() {
 
         val util = JalaliDate()
         fileName += util.currentShamsidate
-
         loadMemory()
         checkPermission()
     }
@@ -95,6 +96,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == 4) {
+            finish()
+        }
+        return true
+    }
+
     override fun onResume() {
         super.onResume()
         setContent {
@@ -107,6 +115,8 @@ class MainActivity : ComponentActivity() {
             intent.flags += Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
         }
+
+        loadMemory()
 
         sumOfPrices = 0
         uiList.forEach {
@@ -143,13 +153,13 @@ class MainActivity : ComponentActivity() {
 
     private fun exportImages(excelUri: Uri) {
 
-        var images = mutableListOf<Bitmap>()
+        val images = mutableListOf<Bitmap>()
         val outputImages = mutableListOf<Bitmap>()
         val outputFiles = mutableListOf<File>()
         val uris = ArrayList<Uri>()
 
         uiList.forEach {
-            if (it.imgAddress != "") {
+            if (it.imgAddress != "" && it.hasImageFile) {
                 images.add(
                     writeFactorNumber(
                         BitmapFactory.decodeFile(it.imgAddress),
@@ -266,6 +276,8 @@ class MainActivity : ComponentActivity() {
 
     private fun exportFile() {
 
+        isGeneratingOutputFile = true
+
         val workbook = XSSFWorkbook()
         val sheet = workbook.createSheet("تنخواه")
 
@@ -292,7 +304,7 @@ class MainActivity : ComponentActivity() {
         createCell(headerRow, 2, "شرح")
         createCell(headerRow, 3, "مرکز هزینه")
         createCell(headerRow, 4, "فاکتور")
-        createCell(headerRow, 5, "مبلغ (ریال)")
+        createCell(headerRow, 5, "مبلغ (تومان)")
 
         uiList.forEach {
             val row = sheet.createRow(sheet.physicalNumberOfRows)
@@ -301,12 +313,17 @@ class MainActivity : ComponentActivity() {
             createCell(row, 2, it.specification)
             createCell(row, 3, it.payTo)
             createCell(row, 4, it.factorNumber.toDouble())
-            createCell(row, 5, it.price.toDouble())
+            val priceCell = row.createCell(5)
+            priceCell.cellStyle.setDataFormat(getBuiltinFormat("#,##0"))
+            priceCell.setCellValue(it.price.toDouble())
         }
 
         val sumOfPriceRow = sheet.createRow(sheet.physicalNumberOfRows)
         sumOfPriceRow.createCell(4).setCellValue("جمع: ")
-        sumOfPriceRow.createCell(5).setCellValue(sumOfPrices.toDouble())
+        val sumCell = sumOfPriceRow.createCell(5)
+        sumCell.cellStyle.setDataFormat(getBuiltinFormat("#,##0"))
+        sumCell.setCellValue(sumOfPrices.toDouble())
+
 
         sheet.setColumnWidth(1, 5000)
         sheet.setColumnWidth(2, 10000)
@@ -352,6 +369,7 @@ class MainActivity : ComponentActivity() {
             outFile
         )
         exportImages(uri)
+        isGeneratingOutputFile = false
     }
 
     private fun createCell(row: Row, columnIndex: Int, value: String) {
@@ -381,12 +399,59 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun clear(items: Items) {
+        openHelpDialog = false
         uiList.remove(items)
         sumOfPrices = 0
         uiList.forEach {
             sumOfPrices += it.price
         }
         saveToMemory()
+    }
+
+    private fun convertEnglishNumbersToPersian(input: String): String {
+        var inputCopy = input
+        inputCopy = inputCopy.replace("0", "۰")
+        inputCopy = inputCopy.replace("1", "۱")
+        inputCopy = inputCopy.replace("2", "۲")
+        inputCopy = inputCopy.replace("3", "۳")
+        inputCopy = inputCopy.replace("4", "۴")
+        inputCopy = inputCopy.replace("5", "۵")
+        inputCopy = inputCopy.replace("6", "۶")
+        inputCopy = inputCopy.replace("7", "۷")
+        inputCopy = inputCopy.replace("8", "۸")
+        inputCopy = inputCopy.replace("9", "۹")
+
+        var output = ""
+
+        if (inputCopy.length % 3 == 0) {
+            for (i in 0 until inputCopy.length) {
+                if (i != 0 && i % 3 == 0) {
+                    output += "٫"
+                }
+                output += inputCopy[i]
+            }
+        } else if (inputCopy.length % 3 == 1) {
+            output += inputCopy[0]
+            output += "٫"
+            for (i in 0 until inputCopy.length - 1) {
+                if (i != 0 && i % 3 == 0) {
+                    output += "٫"
+                }
+                output += inputCopy[i + 1]
+            }
+        } else if (inputCopy.length % 3 == 2) {
+            output += inputCopy[0]
+            output += inputCopy[1]
+            output += "٫"
+            for (i in 0 until inputCopy.length - 2) {
+                if (i != 0 && i % 3 == 0) {
+                    output += "٫"
+                }
+                output += inputCopy[i + 2]
+            }
+        }
+
+        return output
     }
 
     @Composable
@@ -415,7 +480,7 @@ class MainActivity : ComponentActivity() {
             ) {
 
                 Text(
-                    text = "مجموع هزینه ها: $sumOfPrices",
+                    text = "مجموع هزینه ها: " + convertEnglishNumbersToPersian(sumOfPrices.toString()),
                     textAlign = TextAlign.Right,
                     modifier = Modifier
                         .align(Alignment.CenterVertically)
@@ -427,11 +492,10 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Button(
                         onClick = {
-                            val intent = Intent(this@MainActivity, AddNewItemActivity::class.java)
-                            startActivity(intent)
+                            openSelectFactorTypeDialog = true
                         },
                     ) {
-                        Text(text = "اضافه کردن تنخواه جدید")
+                        Text(text = "ثبت فاکتور جدید")
                     }
                 }
             }
@@ -454,7 +518,7 @@ class MainActivity : ComponentActivity() {
 
             title = {
                 Text(
-                    text = "لیست تنخواه ها",
+                    text = "لیست فاکتور ها",
                     modifier = Modifier
                         .padding(start = 35.dp)
                         .fillMaxSize()
@@ -472,6 +536,15 @@ class MainActivity : ComponentActivity() {
 
             if (openFileDialog) {
                 FileAlertDialog()
+            }
+            if (openSelectFactorTypeDialog) {
+                SelectFactorTypeAlertDialog()
+            }
+            if (openHelpDialog && uiList.isEmpty()) {
+                ShowHelpAlertDialog()
+            }
+            if (isGeneratingOutputFile) {
+                ShowLoadingAlertDialog()
             }
 
             LazyColumn(modifier = Modifier.padding(top = 8.dp, bottom = 56.dp)) {
@@ -493,8 +566,8 @@ class MainActivity : ComponentActivity() {
             Item(
                 i, uiList,
                 text1 = "تاریخ: " + uiList[i].date,
-                text2 = "مبلغ (ریال): " + uiList[i].price.toString(),
-                clickable = true
+                text2 = "مبلغ (تومان): " + convertEnglishNumbersToPersian(uiList[i].price.toString()),
+                clickable = uiList[i].hasImageFile
             ) {
                 Intent(this@MainActivity, ShowPictureActivity::class.java).apply {
                     putExtra("imgAddress", uiList[i].imgAddress)
@@ -536,28 +609,27 @@ class MainActivity : ComponentActivity() {
 
                 Column {
 
-                    Text(
-                        text = "نام فایل خروجی را وارد کنید", modifier = Modifier
-                            .padding(top = 10.dp, start = 10.dp, end = 10.dp)
-                    )
-
                     OutlinedTextField(
+                        label = { Text("نام فایل خروجی را وارد کنید")},
                         value = fileName, onValueChange = {
                             fileName = it
                         },
                         modifier = Modifier
-                            .padding(top = 10.dp, start = 10.dp, end = 10.dp)
-                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
+                            .align(Alignment.CenterHorizontally),
+                        singleLine = true
                     )
 
                     Button(modifier = Modifier
-                        .padding(bottom = 10.dp, top = 10.dp, start = 10.dp, end = 10.dp)
-                        .align(Alignment.CenterHorizontally),
+                        .padding(bottom = 16.dp, start = 24.dp, end = 24.dp, top = 16.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .height(52.dp)
+                        .fillMaxWidth(),
                         onClick = {
                             openFileDialog = false
                             exportFile()
                         }) {
-                        Text(text = "ذخیره")
+                        Text(text = "ساخت فایل های تنخواه", style = Typography.h5)
                     }
                 }
             },
@@ -565,6 +637,120 @@ class MainActivity : ComponentActivity() {
             onDismissRequest = {
                 openFileDialog = false
             }
+        )
+    }
+
+    @Composable
+    fun SelectFactorTypeAlertDialog() {
+
+        AlertDialog(
+            onDismissRequest = {
+                openSelectFactorTypeDialog = false
+            },
+            buttons = {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    verticalArrangement = Arrangement.SpaceAround,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    Button(
+                        onClick = {
+                            openSelectFactorTypeDialog = false
+                            val intent = Intent(this@MainActivity, GetFromSnappActivity::class.java)
+                            startActivity(intent)
+                        }, modifier = Modifier
+                            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .height(52.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(text = "ثبت فاکتور اسنپ", style = MaterialTheme.typography.h5)
+                    }
+                    Button(
+                        onClick = {
+                            openSelectFactorTypeDialog = false
+                            val intent = Intent(this@MainActivity, AddNewItemActivity::class.java)
+                            startActivity(intent)
+                        },
+                        modifier = Modifier
+                            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 16.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .height(52.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(text = "ثبت سایر فاکتور ها", style = MaterialTheme.typography.h5)
+                    }
+                }
+            }
+        )
+    }
+
+    @Composable
+    fun ShowHelpAlertDialog() {
+        AlertDialog(
+            onDismissRequest = { openHelpDialog = false },
+            buttons = {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    Text(
+                        text = "با زدن دکمه (ثبت فاکتور جدید) در پایین صفحه، فاکتور جدید ثبت کنید. برای دریافت فایل اکسل به همراه تصاویر فاکتور ها، دکمه اشتراک در بالای صفحه را فشار دهید. با لمس هر فاکتور، تصویر آن را می توانید ببینید.",
+                        modifier = Modifier.padding(top = 24.dp, bottom = 0.dp, end = 24.dp, start = 24.dp),
+                        style = Typography.h5
+                    )
+                    Button(
+                        onClick = {
+                            openHelpDialog = false
+                        },
+                        modifier = Modifier
+                            .padding(bottom = 24.dp, top = 24.dp, end = 24.dp, start = 24.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .height(52.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(text = "متوجه شدم", style = MaterialTheme.typography.h5)
+                    }
+                }
+            },
+        )
+    }
+
+    @Composable
+    fun ShowLoadingAlertDialog() {
+        AlertDialog(
+            onDismissRequest = { },
+            buttons = {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .padding(top = 24.dp),
+                        strokeWidth = 6.dp
+                    )
+
+                    Text(
+                        text = "در حال ساخت فایل های تنخواه",
+                        modifier = Modifier.padding(top = 48.dp, bottom = 24.dp),
+                        style = Typography.h5
+                    )
+                }
+            },
         )
     }
 }

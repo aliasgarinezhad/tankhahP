@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.preference.PreferenceManager
 import com.domil.tankhahp.ui.theme.ErrorSnackBar
 import com.domil.tankhahp.ui.theme.TankhahPTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.launch
 
 class UserDataActivity : ComponentActivity() {
 
@@ -25,6 +28,7 @@ class UserDataActivity : ComponentActivity() {
     private var globalCardNumber by mutableStateOf("")
     private var cardNumber by mutableStateOf("")
     private var state = SnackbarHostState()
+    private var savePressed by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +69,10 @@ class UserDataActivity : ComponentActivity() {
 
             Button(
                 onClick = {
+                    savePressed = true
+                    if (fullName == "" || cardNumber == "" || globalCardNumber == "") {
+                        return@Button
+                    }
                     saveMemory()
                     val intent =
                         Intent(this@UserDataActivity, MainActivity::class.java)
@@ -72,10 +80,12 @@ class UserDataActivity : ComponentActivity() {
                     startActivity(intent)
                 },
                 modifier = Modifier
-                    .padding(top = 20.dp)
+                    .padding(top = 24.dp, start = 24.dp, end = 24.dp)
                     .align(Alignment.CenterHorizontally)
+                    .height(52.dp)
+                    .fillMaxWidth()
             ) {
-                Text(text = "ثبت مشخصات")
+                Text(text = "ثبت مشخصات", style = MaterialTheme.typography.h5)
             }
         }
     }
@@ -107,9 +117,10 @@ class UserDataActivity : ComponentActivity() {
                 fullName = it
             },
             modifier = Modifier
-                .padding(top = 10.dp, start = 10.dp, end = 10.dp)
+                .padding(top = 16.dp, start = 24.dp, end = 24.dp)
                 .fillMaxWidth(),
-            label = { Text(text = "نام و نام خانوادگی خود را وارد کنید") }
+            label = { Text(text = "نام و نام خانوادگی خود را وارد کنید") },
+            isError = if (savePressed) fullName.isEmpty() else false
         )
     }
 
@@ -121,10 +132,11 @@ class UserDataActivity : ComponentActivity() {
                 cardNumber = it
             },
             modifier = Modifier
-                .padding(top = 10.dp, start = 10.dp, end = 10.dp)
+                .padding(top = 8.dp, start = 24.dp, end = 24.dp)
                 .fillMaxWidth(),
             label = { Text(text = "شماره کارت خود را وارد کنید") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            isError = if (savePressed) cardNumber.isEmpty() else false
         )
     }
 
@@ -136,11 +148,11 @@ class UserDataActivity : ComponentActivity() {
                 globalCardNumber = it
             },
             modifier = Modifier
-                .padding(top = 10.dp, start = 10.dp, end = 10.dp)
+                .padding(top = 8.dp, start = 24.dp, end = 24.dp)
                 .fillMaxWidth(),
             label = { Text(text = "شماره شبا خود را بدون IR وارد کنید") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            isError = if (savePressed) globalCardNumber.isEmpty() else false
         )
     }
-
 }

@@ -1,9 +1,6 @@
 package com.domil.tankhahp.ui.theme
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -11,15 +8,22 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.domil.tankhahp.Items
+import com.domil.tankhahp.R
+
 
 @Composable
 fun ErrorSnackBar(state: SnackbarHostState) {
@@ -62,12 +66,12 @@ fun Item(
     i: Int,
     uiList: MutableList<Items>,
     clickable: Boolean = false,
-    text1 : String,
-    text2 : String,
-    colorFull : Boolean = false,
+    text1: String,
+    text2: String,
+    colorFull: Boolean = false,
     onLongClick: () -> Unit = {},
     onClick: () -> Unit = {},
-    ) {
+) {
 
     val topPadding = if (i == 0) 16.dp else 12.dp
     val bottomPadding = if (i == uiList.size - 1) 12.dp else 0.dp
@@ -78,54 +82,17 @@ fun Item(
             .padding(start = 16.dp, end = 16.dp, bottom = bottomPadding, top = topPadding)
             .shadow(elevation = 5.dp, shape = MaterialTheme.shapes.small)
             .background(
-                color = if(colorFull) JeanswestSelected else MaterialTheme.colors.onPrimary,
+                color = if (colorFull) JeanswestSelected else MaterialTheme.colors.onPrimary,
                 shape = MaterialTheme.shapes.small
             )
             .fillMaxWidth()
             .wrapContentHeight()
             .testTag("items")
-            .combinedClickable(enabled = clickable, onLongClick = { onLongClick() }, onClick = { onClick() })
+            .combinedClickable(
+                enabled = clickable,
+                onLongClick = { onLongClick() },
+                onClick = { onClick() })
     ) {
-
-        /*Box {
-
-            Image(
-                painter = rememberImagePainter(
-                    uiList[i].imageUrl,
-                ),
-                contentDescription = "",
-                modifier = Modifier
-                    .padding(end = 4.dp, top = 12.dp, bottom = 12.dp, start = 12.dp)
-                    .shadow(0.dp, shape = Shapes.large)
-                    .background(
-                        color = MaterialTheme.colors.onPrimary,
-                        shape = Shapes.large
-                    )
-                    .border(
-                        BorderStroke(2.dp, color = BorderLight),
-                        shape = Shapes.large
-                    )
-                    .fillMaxHeight()
-                    .width(70.dp)
-            )
-
-            /*if (uiList[i].requestedNum > 0) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 6.dp, start = 6.dp)
-                        .background(
-                            shape = RoundedCornerShape(24.dp),
-                            color = warningColor
-                        )
-                        .size(24.dp)
-                ) {
-                    Text(
-                        text = uiList[i].requestedNum.toString(),
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-            }*/
-        }*/
 
         Row(
             modifier = Modifier
@@ -142,19 +109,34 @@ fun Item(
                     text = text1,
                     style = MaterialTheme.typography.body2,
                     textAlign = TextAlign.Right,
-                    modifier = Modifier.padding(bottom = 8.dp).align(Alignment.Start)
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .align(Alignment.Start)
                 )
                 Text(
                     text = text2,
                     style = MaterialTheme.typography.body2,
                     textAlign = TextAlign.Right,
-                    modifier = Modifier.padding(bottom = 8.dp).align(Alignment.Start)
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .align(Alignment.Start)
                 )
                 Text(
                     text = "مرکز هزینه: " + uiList[i].payTo,
                     style = MaterialTheme.typography.body2,
                     textAlign = TextAlign.Right,
-                    modifier = Modifier.padding(bottom = 8.dp).align(Alignment.Start)
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .align(Alignment.Start)
+                )
+                Text(
+                    text = "نوع فاکتور: " +
+                            if (uiList[i].hasImageFile) "تصویری " else "کاغذی " + "با شماره فاکتور " + uiList[i].factorNumber,
+                    style = MaterialTheme.typography.body2,
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .align(Alignment.Start)
                 )
                 Text(
                     text = "شرح: " + uiList[i].specification,
@@ -169,7 +151,11 @@ fun Item(
 
 @Composable
 fun ProductCodeTextField(
-    modifier: Modifier, onSearch : () -> Unit, hint : String, onValueChange : (it : String) -> Unit, value : String
+    modifier: Modifier,
+    onSearch: () -> Unit,
+    hint: String,
+    onValueChange: (it: String) -> Unit,
+    value: String
 ) {
 
     val focusManager = LocalFocusManager.current
@@ -204,3 +190,71 @@ fun ProductCodeTextField(
         placeholder = { Text(text = hint) }
     )
 }
+
+@Composable
+fun FilterDropDownList(
+    modifier: Modifier,
+    text: @Composable () -> Unit,
+    values: MutableList<String>,
+    onClick: (item: String) -> Unit
+) {
+
+    var expanded by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    Box(
+        modifier = modifier
+            .shadow(elevation = 1.dp, shape = MaterialTheme.shapes.small)
+            .background(
+                color = MaterialTheme.colors.onPrimary,
+                shape = MaterialTheme.shapes.small
+            )
+            .border(
+                BorderStroke(1.dp, if (expanded) Jeanswest else borderColor),
+                shape = MaterialTheme.shapes.small
+            )
+            .height(56.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable { expanded = true }
+                .testTag("FilterDropDownList")
+                .fillMaxHeight(),
+        ) {
+
+            text()
+            Icon(
+                painter = painterResource(
+                    id = if (expanded) {
+                        R.drawable.ic_baseline_arrow_drop_up_24
+                    } else {
+                        R.drawable.ic_baseline_arrow_drop_down_24
+                    }
+                ),
+                "",
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .padding(start = 4.dp, end = 4.dp)
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .wrapContentWidth()
+                .background(color = BottomBar, shape = Shapes.small)
+        ) {
+            values.forEach {
+                DropdownMenuItem(onClick = {
+                    expanded = false
+                    onClick(it)
+                }) {
+                    Text(text = it)
+                }
+            }
+        }
+    }
+}
+
